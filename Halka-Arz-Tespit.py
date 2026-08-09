@@ -15,7 +15,9 @@ from email.mime.multipart import MIMEMultipart
 from openpyxl.styles import Alignment, Font, PatternFill
 
 print("Gizli (Stealth) Tarayıcı başlatılıyor...")
-bugun_tarih = datetime.datetime.now()
+# YENİ EKLENEN KISIM: Türkiye saat dilimi (UTC+3)
+tr_timezone = datetime.timezone(datetime.timedelta(hours=3))
+bugun_tarih = datetime.datetime.now(tr_timezone)
 current_year = bugun_tarih.year
 
 
@@ -251,7 +253,7 @@ def mail_gonder(baslik, icerik):
 
 
 # --- 5. DİNAMİK RAPORLAMA VE MAİL MANTIĞI ---
-anlik_zaman = datetime.datetime.now().strftime("%d.%m.%Y - %H:%M")
+anlik_zaman = datetime.datetime.now(tr_timezone).strftime("%d.%m.%Y - %H:%M")
 guncel_tum_firmalar = yaklasan_listesi + tamamlanan_listesi + kismi_listesi
 
 
