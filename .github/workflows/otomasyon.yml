@@ -37,4 +37,5 @@ jobs:
         git config --global user.email "actions@github.com"
         git add Halka_Arz_Verileri.xlsx
         git commit -m "Günlük Excel Güncellemesi" || echo "Değişiklik yok"
+        git pull --rebase origin main
         git push
