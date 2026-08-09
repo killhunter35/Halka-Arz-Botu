@@ -244,14 +244,23 @@ def telegram_gonder(icerik):
         return
         
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": icerik
-    }
-    try:
-        requests.post(url, json=payload)
-    except Exception as e:
-        print(f"Telegram hatası: {e}")
+    
+    # Mesaj çok uzunsa 4000 karakterlik parçalara böl
+    max_uzunluk = 4000
+    parcalar = [icerik[i:i+max_uzunluk] for i in range(0, len(icerik), max_uzunluk)]
+    
+    for parca in parcalar:
+        payload = {
+            "chat_id": chat_id,
+            "text": parca
+        }
+        try:
+            cevap = requests.post(url, json=payload)
+            # Eğer Telegram mesajı reddederse, gerçek hatayı bize yazdır
+            if cevap.status_code != 200:
+                print(f"Telegram Reddedildi: {cevap.text}")
+        except Exception as e:
+            print(f"Telegram bağlantı hatası: {e}")
         
 def mail_gonder(baslik, icerik):
     # Şifreler GitHub'ın güvenli kasasından çekiliyor
