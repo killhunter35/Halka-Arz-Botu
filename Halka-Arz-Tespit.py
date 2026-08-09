@@ -3,6 +3,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
+import requests
 import time
 import pandas as pd
 import os
@@ -235,6 +236,23 @@ driver.quit()
 
 
 # --- 4. MAİL GÖNDERME FONKSİYONU ---
+def telegram_gonder(icerik):
+    token = os.environ.get("TELEGRAM_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    
+    if not token or not chat_id:
+        return
+        
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": icerik
+    }
+    try:
+        requests.post(url, json=payload)
+    except Exception as e:
+        print(f"Telegram hatası: {e}")
+        
 def mail_gonder(baslik, icerik):
     # Şifreler GitHub'ın güvenli kasasından çekiliyor
     gonderen = os.environ.get("MAIL_ADRESI")
@@ -295,10 +313,12 @@ if eski_firmalar and (yeni_yaklasan or yeni_tamamlanan or yeni_kismi or bugun_ba
     mail_icerik += mail_kategori_metni("KISMİ BÖLÜNME LİSTESİNE EKLENENLER", yeni_kismi)
 
     mail_gonder(mail_baslik, mail_icerik)
+    telegram_gonder(f"🚨 {mail_baslik}\n\n{mail_icerik}")
 
 elif eski_firmalar:
-    mail_gonder("Günlük Halka Arz Taraması Raporu",
+    mail_gonder("Günlük Halka Arz Taraması Raporu", 
                 f"Tarih: {anlik_zaman}\nTarama Yapıldı. Bugün talep toplayan veya sisteme yeni eklenen bir firma bulunamadı.")
+    telegram_gonder(f"✅ Günlük Tarama Yapıldı ({anlik_zaman})\nBugün talep toplayan veya sisteme yeni eklenen bir firma bulunamadı.")
 
 # --- 6. EXCEL'İ GÜNCELLEME VE TEMİZLEME ---
 yeni_tam_ve_kismi_isimler = [f["Firma Adı"] for f in (tamamlanan_listesi + kismi_listesi)]
