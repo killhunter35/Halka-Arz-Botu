@@ -27,6 +27,8 @@ jobs:
       env:
         MAIL_ADRESI: ${{ secrets.MAIL_ADRESI }}
         MAIL_SIFRESI: ${{ secrets.MAIL_SIFRESI }}
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: python Halka-Arz-Tespit.py
 
     - name: Güncel Excel'i GitHub'a Kaydet
