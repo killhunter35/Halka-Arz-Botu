@@ -11,18 +11,60 @@ import datetime
 import re
 import smtplib
 import ssl
+import io
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from openpyxl.styles import Alignment, Font, PatternFill
 
 print("Gizli (Stealth) Tarayıcı başlatılıyor...")
-# YENİ EKLENEN KISIM: Türkiye saat dilimi (UTC+3)
 tr_timezone = datetime.timezone(datetime.timedelta(hours=3))
 bugun_tarih = datetime.datetime.now(tr_timezone)
 current_year = bugun_tarih.year
 
+# --- İLK İŞLEM GÜNÜ TAKVİM OLUŞTURUCU (ALARM: -1 GÜN 22:00) ---
+def ilk_islem_takvimi_olustur(firma_adi, tarih_str):
+    aylar = {"ocak": "01", "şubat": "02", "mart": "03", "nisan": "04", "mayıs": "05", "haziran": "06", 
+             "temmuz": "07", "ağustos": "08", "eylül": "09", "ekim": "10", "kasım": "11", "aralık": "12"}
+    
+    tarih_str = tarih_str.lower()
+    ay_no = "01"
+    for ay, no in aylar.items():
+        if ay in tarih_str:
+            ay_no = no
+            break
+            
+    yil_match = re.search(r'202\d', tarih_str)
+    yil = yil_match.group(0) if yil_match else str(current_year)
+    
+    gun_match = re.search(r'\b\d{1,2}\b', tarih_str)
+    if not gun_match: 
+        return None
+        
+    gun = int(gun_match.group(0))
+    islem_tarihi_formati = f"{yil}{ay_no}{gun:02d}"
+    
+    # Borsa 10:00'da açılır. Trigger -PT12H ile alarm bir önceki akşam 22:00'de çalar.
+    ics_icerik = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Halka Arz Asistani//TR
+BEGIN:VEVENT
+SUMMARY:🔔 {firma_adi} - İlk İşlem Günü
+DTSTART:{islem_tarihi_formati}T100000
+DTEND:{islem_tarihi_formati}T180000
+DESCRIPTION:Borsada ilk işlem günü! Tahta açılıyor. Stratejini belirle!
+BEGIN:VALARM
+TRIGGER:-PT12H
+ACTION:DISPLAY
+DESCRIPTION:Yarın {firma_adi} işleme başlıyor! Son hazırlıklarını yap.
+END:VALARM
+END:VEVENT
+END:VCALENDAR"""
 
-# --- TALEP TOPLAMA GÜNÜ HESAPLAYICI (SAATLERDEN ARINDIRILMIŞ YENİ SÜRÜM) ---
+    dosya = io.BytesIO(ics_icerik.encode('utf-8'))
+    dosya.name = f"{firma_adi}_Ilk_Islem.ics"
+    return dosya
+
+# --- TALEP TOPLAMA GÜNÜ HESAPLAYICI ---
 def talep_durumu(tarih_metni):
     aylar = {1: "Ocak", 2: "Şubat", 3: "Mart", 4: "Nisan", 5: "Mayıs", 6: "Haziran",
              7: "Temmuz", 8: "Ağustos", 9: "Eylül", 10: "Ekim", 11: "Kasım", 12: "Aralık"}
@@ -32,8 +74,6 @@ def talep_durumu(tarih_metni):
     if ay_adi not in tarih_metni:
         return None
 
-    # 09:00 - 17:00 gibi saatlerin gün sayılarını bozmasını engellemek için
-    # metni sadece ay isminin sol tarafında kalan gün kısmına daraltıyoruz
     gun_blogu = tarih_metni.split(ay_adi)[0]
     sayilar = [int(s) for s in re.findall(r'\d{1,2}', gun_blogu)]
 
@@ -49,11 +89,11 @@ def talep_durumu(tarih_metni):
         return "SON_GUN"
     return None
 
-
 # --- 1. ESKİ HAFIZAYI (EXCEL) OKUMA ---
 dosya_adi = "Halka_Arz_Verileri.xlsx"
 eski_firmalar = set()
-tamamlanan_firmalar = set()  # Erken çıkış tetiği için sadece tamamlananlar listesi
+tamamlanan_firmalar = set() 
+eski_islem_tarihleri = {} 
 df_yaklasan, df_tamamlanan, df_kismi = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 if os.path.exists(dosya_adi):
@@ -63,7 +103,9 @@ if os.path.exists(dosya_adi):
         df_yaklasan = pd.read_excel(dosya_adi, sheet_name="Yaklaşan Arzlar").dropna(subset=["Firma Adı"])
     if "Tamamlanan Arzlar" in excel_dosyasi.sheet_names:
         df_tamamlanan = pd.read_excel(dosya_adi, sheet_name="Tamamlanan Arzlar").dropna(subset=["Firma Adı"])
-        tamamlanan_firmalar.update(df_tamamlanan["Firma Adı"].tolist())  # Tarihi değişmeyecek kesin listeyi doldur
+        tamamlanan_firmalar.update(df_tamamlanan["Firma Adı"].tolist())
+        for _, row in df_tamamlanan.iterrows():
+            eski_islem_tarihleri[row["Firma Adı"]] = str(row.get("İlk İşlem Tarihi", "-"))
     if "Kısmi Bölünme" in excel_dosyasi.sheet_names:
         df_kismi = pd.read_excel(dosya_adi, sheet_name="Kısmi Bölünme").dropna(subset=["Firma Adı"])
 
@@ -78,8 +120,6 @@ options.add_experimental_option("excludeSwitches", ["enable-automation"])
 options.add_experimental_option("useAutomationExtension", False)
 options.add_argument("window-size=1280,800")
 options.add_argument("--headless=new")
-
-# BULUT VE ARKA PLAN İÇİN ZORUNLU STABİLİTE KOMUTLARI
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-gpu")
@@ -120,6 +160,7 @@ test_linkleri = list(dict.fromkeys(test_linkleri))
 yaklasan_listesi, tamamlanan_listesi, kismi_listesi = [], [], []
 yeni_yaklasan, yeni_tamamlanan, yeni_kismi = [], [], []
 bugun_baslayanlar, bugun_bitenler = [], []
+yeni_islem_tarihleri_eklenenler = []
 
 # --- 3. DİNAMİK AKILLI TARAMA VE VERİ ÇEKME ---
 for index_no, link in enumerate(test_linkleri):
@@ -130,13 +171,16 @@ for index_no, link in enumerate(test_linkleri):
     sayfa_basligi = driver.title.replace(" Halka Arz", "").strip()
     sayfa_metni = detay_soup.text
 
+    eski_islem = eski_islem_tarihleri.get(sayfa_basligi, "-")
+    
     # --- YENİ DİNAMİK ERKEN ÇIKIŞ MANTIĞI ---
-    # Eğer firma zaten "Tamamlanan" listesindeyse dur! Rakam saymaya son!
     if sayfa_basligi in tamamlanan_firmalar:
-        print(
-            f"\n✅ DİNAMİK AKILLI TARAMA: '{sayfa_basligi}' zaten tamamlanmış bir halka arz. Tarama burada güvenle sonlandırıldı.")
-        break
-
+        # Sadece işlem tarihi de kesinleşmişse taramayı bitir!
+        if "202" in eski_islem:
+            print(f"\n✅ DİNAMİK AKILLI TARAMA: '{sayfa_basligi}' zaten tamamlanmış ve işlem tarihi belli. Tarama güvenle sonlandırıldı.")
+            break
+        else:
+            print(f"🔄 '{sayfa_basligi}' tamamlanmış ancak işlem tarihi bekleniyor. Kontrol ediliyor...")
 
     def tablo_verisi_al(baslik_metni):
         etiket = detay_soup.find(string=lambda x: x and baslik_metni in x)
@@ -144,7 +188,6 @@ for index_no, link in enumerate(test_linkleri):
             td_ler = etiket.find_parent("tr").find_all("td")
             if len(td_ler) > 1: return td_ler[1].text.replace("*", "").strip()
         return "-"
-
 
     tarih_metni = tablo_verisi_al("Halka Arz Tarihi")
     eski_tamamlanmis_mi = any(str(yil) in tarih_metni for yil in range(1980, current_year))
@@ -154,12 +197,22 @@ for index_no, link in enumerate(test_linkleri):
         durum = "KISMİ BÖLÜNME"
         kismi_listesi.append({"Firma Adı": sayfa_basligi, "Halka Arz Tarihi": tarih_metni,
                               "BİST İlk İşlem Tarihi": tablo_verisi_al("İlk İşlem Tarihi")})
+                              
     elif "Halka Arz Sonuçları" in sayfa_metni or "Bist İlk İşlem Tarihi" in sayfa_metni or eski_tamamlanmis_mi:
         durum = "TAMAMLANAN ARZ"
+        yeni_islem = tablo_verisi_al("İlk İşlem Tarihi")
+        
+        # TAKVİM TETİKLEYİCİSİ: Eskiden tarihi yoktu ama şimdi geldiyse listeye al!
+        if "202" not in eski_islem and "202" in yeni_islem:
+            yeni_islem_tarihleri_eklenenler.append({
+                "Firma": sayfa_basligi,
+                "Tarih": yeni_islem
+            })
+            
         tamamlanan_veriler = {
             "Firma Adı": sayfa_basligi, "Halka Arz Tarihi": tarih_metni, "Fiyat": tablo_verisi_al("Halka Arz Fiyatı"),
             "Lot Miktarı": tablo_verisi_al("Pay :"), "Dağıtım Yöntemi": tablo_verisi_al("Dağıtım Yöntemi"),
-            "İlk İşlem Tarihi": tablo_verisi_al("İlk İşlem Tarihi"), "Bireysel Katılımcı": "-", "Bireysel Oran": "-",
+            "İlk İşlem Tarihi": yeni_islem, "Bireysel Katılımcı": "-", "Bireysel Oran": "-",
             "Toplam Katılımcı": "-"
         }
         bireysel_hucre = detay_soup.find("td", string=lambda x: x and "Yurt İçi Bireysel" in x)
@@ -172,6 +225,7 @@ for index_no, link in enumerate(test_linkleri):
         if toplam_hucre and toplam_hucre.find_parent("tr") and len(toplam_hucre.find_parent("tr").find_all("td")) >= 2:
             tamamlanan_veriler["Toplam Katılımcı"] = toplam_hucre.find_parent("tr").find_all("td")[1].text.strip()
         tamamlanan_listesi.append(tamamlanan_veriler)
+        
     else:
         durum = "YAKLAŞAN/TASLAK ARZ"
         t_durum = talep_durumu(tarih_metni)
@@ -195,9 +249,7 @@ for index_no, link in enumerate(test_linkleri):
             yaklasan_veriler["Lot Miktarı"] = pay_etiketi.find_parent(["tr", "li", "div"]).text.split(":")[-1].strip()
         dy_etiket = detay_soup.find(string=lambda x: x and "Dağıtım Yöntemi" in x)
         if dy_etiket and dy_etiket.find_parent("tr") and ":" in dy_etiket.find_parent("tr").text:
-            yaklasan_veriler["Dağıtım Yöntemi"] = dy_etiket.find_parent("tr").text.split(":")[-1].replace("*",
-                                                                                                          "").strip()
-
+            yaklasan_veriler["Dağıtım Yöntemi"] = dy_etiket.find_parent("tr").text.split(":")[-1].replace("*", "").strip()
 
         def ozet_bilgi_cek(baslik_metni):
             baslik = detay_soup.find("h5", string=lambda x: x and baslik_metni in x)
@@ -206,7 +258,6 @@ for index_no, link in enumerate(test_linkleri):
                 for small in p_etiket.find_all("small"): small.decompose()
                 return p_etiket.get_text(separator="\n", strip=True)
             return "-"
-
 
         yaklasan_veriler["Fon Kullanımı"], yaklasan_veriler["Tahsisat Grupları"] = ozet_bilgi_cek(
             "Fonun Kullanım Yeri"), ozet_bilgi_cek("Tahsisat Grupları")
@@ -234,8 +285,7 @@ for index_no, link in enumerate(test_linkleri):
 
 driver.quit()
 
-
-# --- 4. MAİL GÖNDERME FONKSİYONU ---
+# --- 4. MAİL VE TELEGRAM GÖNDERME FONKSİYONLARI ---
 def telegram_gonder(icerik):
     token = os.environ.get("TELEGRAM_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -244,26 +294,30 @@ def telegram_gonder(icerik):
         return
         
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    
-    # Mesaj çok uzunsa 4000 karakterlik parçalara böl
     max_uzunluk = 4000
     parcalar = [icerik[i:i+max_uzunluk] for i in range(0, len(icerik), max_uzunluk)]
     
     for parca in parcalar:
-        payload = {
-            "chat_id": chat_id,
-            "text": parca
-        }
+        payload = {"chat_id": chat_id, "text": parca}
         try:
-            cevap = requests.post(url, json=payload)
-            # Eğer Telegram mesajı reddederse, gerçek hatayı bize yazdır
-            if cevap.status_code != 200:
-                print(f"Telegram Reddedildi: {cevap.text}")
+            requests.post(url, json=payload)
         except Exception as e:
             print(f"Telegram bağlantı hatası: {e}")
-        
+
+def telegram_dosya_gonder(dosya, aciklama):
+    token = os.environ.get("TELEGRAM_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id: return
+    
+    url = f"https://api.telegram.org/bot{token}/sendDocument"
+    payload = {"chat_id": chat_id, "caption": aciklama}
+    files = {"document": (dosya.name, dosya.getvalue(), "text/calendar")}
+    try:
+        requests.post(url, data=payload, files=files)
+    except Exception as e:
+        print(f"Takvim gönderme hatası: {e}")
+            
 def mail_gonder(baslik, icerik):
-    # Şifreler GitHub'ın güvenli kasasından çekiliyor
     gonderen = os.environ.get("MAIL_ADRESI")
     sifre = os.environ.get("MAIL_SIFRESI")
     alici = os.environ.get("MAIL_ADRESI")
@@ -278,11 +332,9 @@ def mail_gonder(baslik, icerik):
     except Exception as e:
         print(f"Mail hatası: {e}")
 
-
 # --- 5. DİNAMİK RAPORLAMA VE MAİL MANTIĞI ---
 anlik_zaman = datetime.datetime.now(tr_timezone).strftime("%d.%m.%Y - %H:%M")
 guncel_tum_firmalar = yaklasan_listesi + tamamlanan_listesi + kismi_listesi
-
 
 def mail_kategori_metni(baslik_metni, firma_isimleri):
     if not firma_isimleri: return ""
@@ -296,15 +348,15 @@ def mail_kategori_metni(baslik_metni, firma_isimleri):
             metin += "\n" + "=" * 50 + "\n"
     return metin
 
-
 # MAİL ÖNCELİK VE İÇERİK KONTROLÜ
-if eski_firmalar and (yeni_yaklasan or yeni_tamamlanan or yeni_kismi or bugun_baslayanlar or bugun_bitenler):
+if eski_firmalar and (yeni_yaklasan or yeni_tamamlanan or yeni_kismi or bugun_baslayanlar or bugun_bitenler or yeni_islem_tarihleri_eklenenler):
 
-    # Mailin Başlığı (En Acil Olana Göre Atanır)
     if bugun_bitenler:
         mail_baslik = f"⏳ SON GÜN: {bugun_bitenler[0]} Talep Toplaması Bitiyor!"
     elif bugun_baslayanlar:
         mail_baslik = f"🔔 BAŞLADI: {bugun_baslayanlar[0]} Talep Topluyor!"
+    elif yeni_islem_tarihleri_eklenenler:
+        mail_baslik = f"📅 İLK İŞLEM TARİHİ: {yeni_islem_tarihleri_eklenenler[0]['Firma']} Belli Oldu!"
     elif yeni_yaklasan:
         mail_baslik = f"🚨 YENİ Halka Arz (Yaklaşan): {yeni_yaklasan[0]}"
     elif yeni_tamamlanan:
@@ -312,9 +364,13 @@ if eski_firmalar and (yeni_yaklasan or yeni_tamamlanan or yeni_kismi or bugun_ba
     else:
         mail_baslik = "🔄 Sistemde Yeni Güncellemeler Var"
 
-    # Mailin İçeriği
     mail_icerik = f"Tarih: {anlik_zaman}\nSistemde önemli halka arz hareketleri tespit edildi!\n\n"
 
+    if yeni_islem_tarihleri_eklenenler:
+        mail_icerik += "\n📅 İLK İŞLEM TARİHİ BELLİ OLANLAR\n" + "-"*40 + "\n"
+        for item in yeni_islem_tarihleri_eklenenler:
+            mail_icerik += f"FİRMA: {item['Firma']} -> İlk İşlem: {item['Tarih']}\n"
+            
     mail_icerik += mail_kategori_metni("⏳ BUGÜN TALEP TOPLAMASI BİTENLER (SON GÜN)", bugun_bitenler)
     mail_icerik += mail_kategori_metni("🔔 BUGÜN TALEP TOPLAMASI BAŞLAYANLAR", bugun_baslayanlar)
     mail_icerik += mail_kategori_metni("YENİ YAKLAŞAN/TASLAK ARZLAR", yeni_yaklasan)
@@ -323,6 +379,13 @@ if eski_firmalar and (yeni_yaklasan or yeni_tamamlanan or yeni_kismi or bugun_ba
 
     mail_gonder(mail_baslik, mail_icerik)
     telegram_gonder(f"🚨 {mail_baslik}\n\n{mail_icerik}")
+    
+    # TAKVİM DOSYALARINI GÖNDERME İŞLEMİ
+    for item in yeni_islem_tarihleri_eklenenler:
+        ics_dosya = ilk_islem_takvimi_olustur(item['Firma'], item['Tarih'])
+        if ics_dosya:
+            aciklama = f"🔔 {item['Firma']}'nin ilk işlem tarihi belli oldu.\n\nYarın akşam 22:00'de hatırlatmam için aşağıdaki takvimi telefonuna ekle!"
+            telegram_dosya_gonder(ics_dosya, aciklama)
 
 elif eski_firmalar:
     mail_gonder("Günlük Halka Arz Taraması Raporu", 
@@ -332,7 +395,6 @@ elif eski_firmalar:
 # --- 6. EXCEL'İ GÜNCELLEME VE TEMİZLEME ---
 yeni_tam_ve_kismi_isimler = [f["Firma Adı"] for f in (tamamlanan_listesi + kismi_listesi)]
 if not df_yaklasan.empty: df_yaklasan = df_yaklasan[~df_yaklasan["Firma Adı"].isin(yeni_tam_ve_kismi_isimler)]
-
 
 def merge_and_save(yeni_liste, eski_df, sheet_name, writer):
     yeni_df = pd.DataFrame(yeni_liste) if yeni_liste else pd.DataFrame()
@@ -348,7 +410,6 @@ def merge_and_save(yeni_liste, eski_df, sheet_name, writer):
     else:
         final_df = pd.DataFrame()
     if not final_df.empty: final_df.to_excel(writer, sheet_name=sheet_name, index=False)
-
 
 with pd.ExcelWriter(dosya_adi, engine="openpyxl") as writer:
     merge_and_save(yaklasan_listesi, df_yaklasan, "Yaklaşan Arzlar", writer)
