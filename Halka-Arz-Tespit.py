@@ -3,6 +3,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
+import uuid
 import requests
 import time
 import pandas as pd
@@ -43,11 +44,16 @@ def ilk_islem_takvimi_olustur(firma_adi, tarih_str):
     gun = int(gun_match.group(0))
     islem_tarihi_formati = f"{yil}{ay_no}{gun:02d}"
     
-    # Borsa 10:00'da açılır. Trigger -PT12H ile alarm bir önceki akşam 22:00'de çalar.
+    # Apple (iOS) Takviminin etkinliği kaydetmeye izin vermesi için zorunlu alanlar
+    simdi_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    benzersiz_id = str(uuid.uuid4())
+    
     ics_icerik = f"""BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Halka Arz Asistani//TR
 BEGIN:VEVENT
+UID:{benzersiz_id}
+DTSTAMP:{simdi_utc}
 SUMMARY:🔔 {firma_adi} - İlk İşlem Günü
 DTSTART:{islem_tarihi_formati}T100000
 DTEND:{islem_tarihi_formati}T180000
