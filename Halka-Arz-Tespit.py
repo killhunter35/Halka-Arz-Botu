@@ -47,17 +47,18 @@ def ilk_islem_takvimi_olustur(firma_adi, tarih_str):
     simdi_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     benzersiz_id = str(uuid.uuid4())
     
+    # Apple (iOS) Takvimini %100 kandırmak için PRODID kısmını Apple gibi gösteriyoruz
+    # ve saatleri Evrensel Zaman Dilimi (UTC) olan 'Z' formatında (07:00 UTC = 10:00 TRT) gönderiyoruz.
     ics_icerik = f"""BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Halka Arz Asistani//TR
+PRODID:-//Apple Inc.//iOS Calendar//EN
 CALSCALE:GREGORIAN
-METHOD:PUBLISH
 BEGIN:VEVENT
 UID:{benzersiz_id}
 DTSTAMP:{simdi_utc}
+DTSTART:{islem_tarihi_formati}T070000Z
+DTEND:{islem_tarihi_formati}T150000Z
 SUMMARY:🔔 {firma_adi} - İlk İşlem Günü
-DTSTART:{islem_tarihi_formati}T100000
-DTEND:{islem_tarihi_formati}T180000
 DESCRIPTION:Borsada ilk işlem günü! Tahta açılıyor. Stratejini belirle!
 BEGIN:VALARM
 TRIGGER:-PT12H
@@ -67,7 +68,6 @@ END:VALARM
 END:VEVENT
 END:VCALENDAR"""
 
-    # Apple (iOS) Takviminin en büyük takıntısı: Satır sonlarının kesinlikle \r\n olması gerekir.
     ics_icerik = ics_icerik.replace('\r\n', '\n').replace('\n', '\r\n')
 
     dosya = io.BytesIO(ics_icerik.encode('utf-8'))
