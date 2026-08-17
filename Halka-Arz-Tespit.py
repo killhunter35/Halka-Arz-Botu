@@ -44,13 +44,14 @@ def ilk_islem_takvimi_olustur(firma_adi, tarih_str):
     gun = int(gun_match.group(0))
     islem_tarihi_formati = f"{yil}{ay_no}{gun:02d}"
     
-    # Apple (iOS) Takviminin etkinliği kaydetmeye izin vermesi için zorunlu alanlar
     simdi_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     benzersiz_id = str(uuid.uuid4())
     
     ics_icerik = f"""BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Halka Arz Asistani//TR
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
 BEGIN:VEVENT
 UID:{benzersiz_id}
 DTSTAMP:{simdi_utc}
@@ -65,6 +66,9 @@ DESCRIPTION:Yarın {firma_adi} işleme başlıyor! Son hazırlıklarını yap.
 END:VALARM
 END:VEVENT
 END:VCALENDAR"""
+
+    # Apple (iOS) Takviminin en büyük takıntısı: Satır sonlarının kesinlikle \r\n olması gerekir.
+    ics_icerik = ics_icerik.replace('\r\n', '\n').replace('\n', '\r\n')
 
     dosya = io.BytesIO(ics_icerik.encode('utf-8'))
     dosya.name = f"{firma_adi}_Ilk_Islem.ics"
