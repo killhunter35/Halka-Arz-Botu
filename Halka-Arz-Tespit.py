@@ -22,7 +22,7 @@ tr_timezone = datetime.timezone(datetime.timedelta(hours=3))
 bugun_tarih = datetime.datetime.now(tr_timezone)
 current_year = bugun_tarih.year
 
-# --- İLK İŞLEM GÜNÜ TAKVİM OLUŞTURUCU (ALARM: -1 GÜN 22:00) ---
+# --- İLK İŞLEM GÜNÜ TAKVİM OLUŞTURUCU (KUSURSUZ iOS UYUMU) ---
 def ilk_islem_takvimi_olustur(firma_adi, tarih_str):
     aylar = {"ocak": "01", "şubat": "02", "mart": "03", "nisan": "04", "mayıs": "05", "haziran": "06", 
              "temmuz": "07", "ağustos": "08", "eylül": "09", "ekim": "10", "kasım": "11", "aralık": "12"}
@@ -44,34 +44,40 @@ def ilk_islem_takvimi_olustur(firma_adi, tarih_str):
     gun = int(gun_match.group(0))
     islem_tarihi_formati = f"{yil}{ay_no}{gun:02d}"
     
+    # Tam gün etkinliklerinde (All-Day) bitiş tarihi matematiksel olarak her zaman 1 gün sonrası olmalıdır.
+    try:
+        islem_tarihi_obj = datetime.datetime.strptime(islem_tarihi_formati, "%Y%m%d")
+        bitis_tarihi_formati = (islem_tarihi_obj + datetime.timedelta(days=1)).strftime("%Y%m%d")
+    except:
+        return None
+
     simdi_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     benzersiz_id = str(uuid.uuid4())
     
-    # Apple (iOS) Takvimini %100 kandırmak için PRODID kısmını Apple gibi gösteriyoruz
-    # ve saatleri Evrensel Zaman Dilimi (UTC) olan 'Z' formatında (07:00 UTC = 10:00 TRT) gönderiyoruz.
-    ics_icerik = f"""BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//iOS Calendar//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-UID:{benzersiz_id}
-DTSTAMP:{simdi_utc}
-DTSTART:{islem_tarihi_formati}T070000Z
-DTEND:{islem_tarihi_formati}T150000Z
-SUMMARY:🔔 {firma_adi} - İlk İşlem Günü
-DESCRIPTION:Borsada ilk işlem günü! Tahta açılıyor. Stratejini belirle!
-BEGIN:VALARM
-TRIGGER:-PT12H
-ACTION:DISPLAY
-DESCRIPTION:Yarın {firma_adi} işleme başlıyor! Son hazırlıklarını yap.
-END:VALARM
-END:VEVENT
-END:VCALENDAR"""
-
-    ics_icerik = ics_icerik.replace('\r\n', '\n').replace('\n', '\r\n')
+    # Formatlama hatalarını (gizli boşluklar) önlemek için saf ve katı string yapısı kullanıyoruz.
+    # TRIGGER:-PT2H (Tam gün 00:00'da başladığı için 2 saat öncesi olan 22:00'ye alarm kurar)
+    ics_icerik = (
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//Halka Arz Asistani//TR\r\n"
+        "BEGIN:VEVENT\r\n"
+        f"UID:{benzersiz_id}\r\n"
+        f"DTSTAMP:{simdi_utc}\r\n"
+        f"DTSTART;VALUE=DATE:{islem_tarihi_formati}\r\n"
+        f"DTEND;VALUE=DATE:{bitis_tarihi_formati}\r\n"
+        f"SUMMARY:🔔 {firma_adi} - İlk İşlem\r\n"
+        "DESCRIPTION:Borsada ilk işlem günü! Tahta açılıyor.\r\n"
+        "BEGIN:VALARM\r\n"
+        "TRIGGER:-PT2H\r\n"
+        "ACTION:DISPLAY\r\n"
+        f"DESCRIPTION:Yarın {firma_adi} işleme başlıyor!\r\n"
+        "END:VALARM\r\n"
+        "END:VEVENT\r\n"
+        "END:VCALENDAR"
+    )
 
     dosya = io.BytesIO(ics_icerik.encode('utf-8'))
-    dosya.name = f"{firma_adi}_Ilk_Islem.ics"
+    dosya.name = f"{firma_adi}_Takvim.ics"
     return dosya
 
 # --- TALEP TOPLAMA GÜNÜ HESAPLAYICI ---
