@@ -3,7 +3,6 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
-import urllib.parse
 import requests
 import time
 import pandas as pd
@@ -12,7 +11,7 @@ import datetime
 import re
 import smtplib
 import ssl
-import io
+import urllib.parse
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -45,19 +44,15 @@ def ilk_islem_linki_olustur(firma_adi, tarih_str):
     islem_tarihi_formati = f"{yil}{ay_no}{gun:02d}"
     
     try:
-        # İşlem tarihini bulup 1 GÜN GERİYE (Hatırlatma Gününe) gidiyoruz
         islem_tarihi_obj = datetime.datetime.strptime(islem_tarihi_formati, "%Y%m%d")
         hatirlatici_tarihi_obj = islem_tarihi_obj - datetime.timedelta(days=1)
         
-        # Etkinliği doğrudan hatırlatma günü akşam 22:00'ye kuruyoruz. 
-        # (Türkiye saati 22:00, Evrensel UTC saatine göre 19:00'dur)
         start_str = hatirlatici_tarihi_obj.strftime("%Y%m%d") + "T190000Z"
         end_str = hatirlatici_tarihi_obj.strftime("%Y%m%d") + "T191500Z"
         
         baslik = f"🔔 HATIRLATICI: {firma_adi} İlk İşlem Günü"
         aciklama = f"Yarın {firma_adi} borsada işleme başlıyor! Son hazırlıklarını yap ve stratejini belirle."
         
-        # İnternet tarayıcılarının anlayacağı formata çeviriyoruz
         link = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={urllib.parse.quote(baslik)}&dates={start_str}/{end_str}&details={urllib.parse.quote(aciklama)}"
         return link
     except:
@@ -172,9 +167,7 @@ for index_no, link in enumerate(test_linkleri):
 
     eski_islem = eski_islem_tarihleri.get(sayfa_basligi, "-")
     
-    # --- YENİ DİNAMİK ERKEN ÇIKIŞ MANTIĞI ---
     if sayfa_basligi in tamamlanan_firmalar:
-        # Sadece işlem tarihi de kesinleşmişse taramayı bitir!
         if "202" in eski_islem:
             print(f"\n✅ DİNAMİK AKILLI TARAMA: '{sayfa_basligi}' zaten tamamlanmış ve işlem tarihi belli. Tarama güvenle sonlandırıldı.")
             break
@@ -201,7 +194,6 @@ for index_no, link in enumerate(test_linkleri):
         durum = "TAMAMLANAN ARZ"
         yeni_islem = tablo_verisi_al("İlk İşlem Tarihi")
         
-        # TAKVİM TETİKLEYİCİSİ: Eskiden tarihi yoktu ama şimdi geldiyse listeye al!
         if "202" not in eski_islem and "202" in yeni_islem:
             yeni_islem_tarihleri_eklenenler.append({
                 "Firma": sayfa_basligi,
@@ -297,12 +289,11 @@ def telegram_gonder(icerik):
     parcalar = [icerik[i:i+max_uzunluk] for i in range(0, len(icerik), max_uzunluk)]
     
     for parca in parcalar:
-        payload = {"chat_id": chat_id, "text": parca}
+        payload = {"chat_id": chat_id, "text": parca, "parse_mode": "Markdown"}
         try:
             requests.post(url, json=payload)
         except Exception as e:
             print(f"Telegram bağlantı hatası: {e}")
-
             
 def mail_gonder(baslik, icerik):
     gonderen = os.environ.get("MAIL_ADRESI")
@@ -335,7 +326,6 @@ def mail_kategori_metni(baslik_metni, firma_isimleri):
             metin += "\n" + "=" * 50 + "\n"
     return metin
 
-# MAİL ÖNCELİK VE İÇERİK KONTROLÜ
 if eski_firmalar and (yeni_yaklasan or yeni_tamamlanan or yeni_kismi or bugun_baslayanlar or bugun_bitenler or yeni_islem_tarihleri_eklenenler):
 
     if bugun_bitenler:
@@ -368,13 +358,13 @@ if eski_firmalar and (yeni_yaklasan or yeni_tamamlanan or yeni_kismi or bugun_ba
     telegram_gonder(f"🚨 {mail_baslik}\n\n{mail_icerik}")
     
     # TAKVİM LİNKLERİNİ GÖNDERME İŞLEMİ
-for item in yeni_islem_tarihleri_eklenenler:
-    takvim_linki = ilk_islem_linki_olustur(item['Firma'], item['Tarih'])
-    if takvim_linki:
-        mesaj = (f"🔔 **{item['Firma']}**'nin ilk işlem tarihi belli oldu.\n\n"
-                 f"Yarın akşam 22:00'de hatırlatmam için aşağıdaki linke tıklayıp etkinliği doğrudan takvimine kaydedebilirsin:\n\n"
-                 f"👉 [Takvime Ekle]({takvim_linki})")
-        telegram_gonder(mesaj)
+    for item in yeni_islem_tarihleri_eklenenler:
+        takvim_linki = ilk_islem_linki_olustur(item['Firma'], item['Tarih'])
+        if takvim_linki:
+            mesaj = (f"🔔 **{item['Firma']}**'nin ilk işlem tarihi belli oldu.\n\n"
+                     f"Yarın akşam 22:00'de hatırlatmam için aşağıdaki linke tıklayıp etkinliği doğrudan takvimine kaydedebilirsin:\n\n"
+                     f"👉 [Takvime Ekle]({takvim_linki})")
+            telegram_gonder(mesaj)
 
 elif eski_firmalar:
     mail_gonder("Günlük Halka Arz Taraması Raporu", 
