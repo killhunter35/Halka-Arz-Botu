@@ -3,7 +3,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
-import uuid
+import urllib.parse
 import requests
 import time
 import pandas as pd
@@ -22,8 +22,8 @@ tr_timezone = datetime.timezone(datetime.timedelta(hours=3))
 bugun_tarih = datetime.datetime.now(tr_timezone)
 current_year = bugun_tarih.year
 
-# --- İLK İŞLEM GÜNÜ TAKVİM OLUŞTURUCU (KUSURSUZ iOS UYUMU) ---
-def ilk_islem_takvimi_olustur(firma_adi, tarih_str):
+# --- İLK İŞLEM GÜNÜ TAKVİM LİNKİ OLUŞTURUCU (DOSYASIZ) ---
+def ilk_islem_linki_olustur(firma_adi, tarih_str):
     aylar = {"ocak": "01", "şubat": "02", "mart": "03", "nisan": "04", "mayıs": "05", "haziran": "06", 
              "temmuz": "07", "ağustos": "08", "eylül": "09", "ekim": "10", "kasım": "11", "aralık": "12"}
     
@@ -44,41 +44,24 @@ def ilk_islem_takvimi_olustur(firma_adi, tarih_str):
     gun = int(gun_match.group(0))
     islem_tarihi_formati = f"{yil}{ay_no}{gun:02d}"
     
-    # Tam gün etkinliklerinde (All-Day) bitiş tarihi matematiksel olarak her zaman 1 gün sonrası olmalıdır.
     try:
+        # İşlem tarihini bulup 1 GÜN GERİYE (Hatırlatma Gününe) gidiyoruz
         islem_tarihi_obj = datetime.datetime.strptime(islem_tarihi_formati, "%Y%m%d")
-        bitis_tarihi_formati = (islem_tarihi_obj + datetime.timedelta(days=1)).strftime("%Y%m%d")
+        hatirlatici_tarihi_obj = islem_tarihi_obj - datetime.timedelta(days=1)
+        
+        # Etkinliği doğrudan hatırlatma günü akşam 22:00'ye kuruyoruz. 
+        # (Türkiye saati 22:00, Evrensel UTC saatine göre 19:00'dur)
+        start_str = hatirlatici_tarihi_obj.strftime("%Y%m%d") + "T190000Z"
+        end_str = hatirlatici_tarihi_obj.strftime("%Y%m%d") + "T191500Z"
+        
+        baslik = f"🔔 HATIRLATICI: {firma_adi} İlk İşlem Günü"
+        aciklama = f"Yarın {firma_adi} borsada işleme başlıyor! Son hazırlıklarını yap ve stratejini belirle."
+        
+        # İnternet tarayıcılarının anlayacağı formata çeviriyoruz
+        link = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={urllib.parse.quote(baslik)}&dates={start_str}/{end_str}&details={urllib.parse.quote(aciklama)}"
+        return link
     except:
         return None
-
-    simdi_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    benzersiz_id = str(uuid.uuid4())
-    
-    # Formatlama hatalarını (gizli boşluklar) önlemek için saf ve katı string yapısı kullanıyoruz.
-    # TRIGGER:-PT2H (Tam gün 00:00'da başladığı için 2 saat öncesi olan 22:00'ye alarm kurar)
-    ics_icerik = (
-        "BEGIN:VCALENDAR\r\n"
-        "VERSION:2.0\r\n"
-        "PRODID:-//Halka Arz Asistani//TR\r\n"
-        "BEGIN:VEVENT\r\n"
-        f"UID:{benzersiz_id}\r\n"
-        f"DTSTAMP:{simdi_utc}\r\n"
-        f"DTSTART;VALUE=DATE:{islem_tarihi_formati}\r\n"
-        f"DTEND;VALUE=DATE:{bitis_tarihi_formati}\r\n"
-        f"SUMMARY:🔔 {firma_adi} - İlk İşlem\r\n"
-        "DESCRIPTION:Borsada ilk işlem günü! Tahta açılıyor.\r\n"
-        "BEGIN:VALARM\r\n"
-        "TRIGGER:-PT2H\r\n"
-        "ACTION:DISPLAY\r\n"
-        f"DESCRIPTION:Yarın {firma_adi} işleme başlıyor!\r\n"
-        "END:VALARM\r\n"
-        "END:VEVENT\r\n"
-        "END:VCALENDAR"
-    )
-
-    dosya = io.BytesIO(ics_icerik.encode('utf-8'))
-    dosya.name = f"{firma_adi}_Takvim.ics"
-    return dosya
 
 # --- TALEP TOPLAMA GÜNÜ HESAPLAYICI ---
 def talep_durumu(tarih_metni):
@@ -320,18 +303,6 @@ def telegram_gonder(icerik):
         except Exception as e:
             print(f"Telegram bağlantı hatası: {e}")
 
-def telegram_dosya_gonder(dosya, aciklama):
-    token = os.environ.get("TELEGRAM_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
-    if not token or not chat_id: return
-    
-    url = f"https://api.telegram.org/bot{token}/sendDocument"
-    payload = {"chat_id": chat_id, "caption": aciklama}
-    files = {"document": (dosya.name, dosya.getvalue(), "text/calendar")}
-    try:
-        requests.post(url, data=payload, files=files)
-    except Exception as e:
-        print(f"Takvim gönderme hatası: {e}")
             
 def mail_gonder(baslik, icerik):
     gonderen = os.environ.get("MAIL_ADRESI")
@@ -396,12 +367,14 @@ if eski_firmalar and (yeni_yaklasan or yeni_tamamlanan or yeni_kismi or bugun_ba
     mail_gonder(mail_baslik, mail_icerik)
     telegram_gonder(f"🚨 {mail_baslik}\n\n{mail_icerik}")
     
-    # TAKVİM DOSYALARINI GÖNDERME İŞLEMİ
-    for item in yeni_islem_tarihleri_eklenenler:
-        ics_dosya = ilk_islem_takvimi_olustur(item['Firma'], item['Tarih'])
-        if ics_dosya:
-            aciklama = f"🔔 {item['Firma']}'nin ilk işlem tarihi belli oldu.\n\nYarın akşam 22:00'de hatırlatmam için aşağıdaki takvimi telefonuna ekle!"
-            telegram_dosya_gonder(ics_dosya, aciklama)
+    # TAKVİM LİNKLERİNİ GÖNDERME İŞLEMİ
+for item in yeni_islem_tarihleri_eklenenler:
+    takvim_linki = ilk_islem_linki_olustur(item['Firma'], item['Tarih'])
+    if takvim_linki:
+        mesaj = (f"🔔 **{item['Firma']}**'nin ilk işlem tarihi belli oldu.\n\n"
+                 f"Yarın akşam 22:00'de hatırlatmam için aşağıdaki linke tıklayıp etkinliği doğrudan takvimine kaydedebilirsin:\n\n"
+                 f"👉 [Takvime Ekle]({takvim_linki})")
+        telegram_gonder(mesaj)
 
 elif eski_firmalar:
     mail_gonder("Günlük Halka Arz Taraması Raporu", 
