@@ -21,8 +21,9 @@ tr_timezone = datetime.timezone(datetime.timedelta(hours=3))
 bugun_tarih = datetime.datetime.now(tr_timezone)
 current_year = bugun_tarih.year
 
-# --- İLK İŞLEM GÜNÜ TAKVİM LİNKİ OLUŞTURUCU (DOSYASIZ) ---
+# --- İLK İŞLEM GÜNÜ KESTİRME (SHORTCUTS) TETİKLEYİCİSİ ---
 def ilk_islem_linki_olustur(firma_adi, tarih_str):
+    import json
     aylar = {"ocak": "01", "şubat": "02", "mart": "03", "nisan": "04", "mayıs": "05", "haziran": "06", 
              "temmuz": "07", "ağustos": "08", "eylül": "09", "ekim": "10", "kasım": "11", "aralık": "12"}
     
@@ -44,16 +45,22 @@ def ilk_islem_linki_olustur(firma_adi, tarih_str):
     islem_tarihi_formati = f"{yil}{ay_no}{gun:02d}"
     
     try:
+        # Tarihi bulup 1 gün öncesine (Hatırlatma Gününe) gidiyoruz
         islem_tarihi_obj = datetime.datetime.strptime(islem_tarihi_formati, "%Y%m%d")
         hatirlatici_tarihi_obj = islem_tarihi_obj - datetime.timedelta(days=1)
         
-        start_str = hatirlatici_tarihi_obj.strftime("%Y%m%d") + "T190000Z"
-        end_str = hatirlatici_tarihi_obj.strftime("%Y%m%d") + "T191500Z"
+        # iPhone'un takvimi tam okuyabilmesi için Türk usulü tarih formatı: 19.08.2026 22:00
+        tarih_metni = hatirlatici_tarihi_obj.strftime("%d.%m.%Y 22:00")
         
-        baslik = f"🔔 HATIRLATICI: {firma_adi} İlk İşlem Günü"
-        aciklama = f"Yarın {firma_adi} borsada işleme başlıyor! Son hazırlıklarını yap ve stratejini belirle."
+        # Kestirmelere "Sözlük (Dictionary)" olarak gitmesi için JSON formatına çeviriyoruz
+        girdi_dict = {
+            "firma": firma_adi,
+            "tarih": tarih_metni
+        }
+        girdi_encoded = urllib.parse.quote(json.dumps(girdi_dict))
         
-        link = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={urllib.parse.quote(baslik)}&dates={start_str}/{end_str}&details={urllib.parse.quote(aciklama)}"
+        # iOS Shortcuts özel URL şeması
+        link = f"shortcuts://run-shortcut?name=ArzEkle&input={girdi_encoded}"
         return link
     except:
         return None
