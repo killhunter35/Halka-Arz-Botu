@@ -24,7 +24,6 @@ current_year = bugun_tarih.year
 
 # --- İLK İŞLEM GÜNÜ KESTİRME (SHORTCUTS) TETİKLEYİCİSİ ---
 def ilk_islem_linki_olustur(firma_adi, tarih_str):
-    import json
     aylar = {"ocak": "01", "şubat": "02", "mart": "03", "nisan": "04", "mayıs": "05", "haziran": "06", 
              "temmuz": "07", "ağustos": "08", "eylül": "09", "ekim": "10", "kasım": "11", "aralık": "12"}
     
@@ -46,22 +45,14 @@ def ilk_islem_linki_olustur(firma_adi, tarih_str):
     islem_tarihi_formati = f"{yil}{ay_no}{gun:02d}"
     
     try:
-        # Tarihi bulup 1 gün öncesine (Hatırlatma Gününe) gidiyoruz
         islem_tarihi_obj = datetime.datetime.strptime(islem_tarihi_formati, "%Y%m%d")
         hatirlatici_tarihi_obj = islem_tarihi_obj - datetime.timedelta(days=1)
-        
-        # iPhone'un takvimi tam okuyabilmesi için Türk usulü tarih formatı: 19.08.2026 22:00
         tarih_metni = hatirlatici_tarihi_obj.strftime("%d.%m.%Y 22:00")
         
-        # Kestirmelere "Sözlük (Dictionary)" olarak gitmesi için JSON formatına çeviriyoruz
-        girdi_dict = {
-            "firma": firma_adi,
-            "tarih": tarih_metni
-        }
-        girdi_encoded = urllib.parse.quote(json.dumps(girdi_dict))
-        
-        # iOS Shortcuts özel URL şeması
-        link = f"shortcuts://run-shortcut?name=ArzEkle&input={girdi_encoded}"
+        # Linki senin GitHub sitene yönlendiriyoruz!
+        firma_enc = urllib.parse.quote(firma_adi)
+        tarih_enc = urllib.parse.quote(tarih_metni)
+        link = f"https://killhunter35.github.io/Halka-Arz-Botu/yonlendir.html?firma={firma_enc}&tarih={tarih_enc}"
         return link
     except:
         return None
@@ -369,10 +360,9 @@ if eski_firmalar and (yeni_yaklasan or yeni_tamamlanan or yeni_kismi or bugun_ba
     for item in yeni_islem_tarihleri_eklenenler:
         takvim_linki = ilk_islem_linki_olustur(item['Firma'], item['Tarih'])
         if takvim_linki:
-            mesaj = (f"🔔 *{item['Firma']}* firmasının ilk işlem tarihi belli oldu.\n\n"
-                     f"Apple/Telegram güvenlik duvarı sebebiyle Kestirme linkleri direkt tıklanamıyor. "
-                     f"Alarmı kurmak için aşağıdaki linkin üzerine tek tıkla kopyala ve Safari tarayıcına yapıştır:\n\n"
-                     f"`{takvim_linki}`")
+            mesaj = (f"🔔 {item['Firma']} firmasının ilk işlem tarihi belli oldu.\n\n"
+                     f"Yarın akşam 22:00'de hatırlatmam için aşağıdaki linke tıklayıp anımsatıcıyı kurabilirsin:\n\n"
+                     f"👉 {takvim_linki}")
             telegram_gonder(mesaj)
 
 elif eski_firmalar:
