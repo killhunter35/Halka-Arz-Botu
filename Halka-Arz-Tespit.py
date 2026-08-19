@@ -369,9 +369,10 @@ if eski_firmalar and (yeni_yaklasan or yeni_tamamlanan or yeni_kismi or bugun_ba
     for item in yeni_islem_tarihleri_eklenenler:
         takvim_linki = ilk_islem_linki_olustur(item['Firma'], item['Tarih'])
         if takvim_linki:
-            mesaj = (f"🔔 **{item['Firma']}**'nin ilk işlem tarihi belli oldu.\n\n"
-                     f"Yarın akşam 22:00'de hatırlatmam için aşağıdaki linke tıklayıp etkinliği doğrudan takvimine kaydedebilirsin:\n\n"
-                     f"👉 [Takvime Ekle]({takvim_linki})")
+            mesaj = (f"🔔 *{item['Firma']}* firmasının ilk işlem tarihi belli oldu.\n\n"
+                     f"Apple/Telegram güvenlik duvarı sebebiyle Kestirme linkleri direkt tıklanamıyor. "
+                     f"Alarmı kurmak için aşağıdaki linkin üzerine tek tıkla kopyala ve Safari tarayıcına yapıştır:\n\n"
+                     f"`{takvim_linki}`")
             telegram_gonder(mesaj)
 
 elif eski_firmalar:
