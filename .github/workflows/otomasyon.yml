@@ -3,7 +3,7 @@ name: Halka Arz Botu Otomasyonu
 on:
   schedule:
     # Türkiye saatiyle sabah 08:00 (UTC 05:00)
-    - cron: '0 5 * * *'
+    - cron: '40 6 * * *'
   workflow_dispatch: # İstediğin zaman manuel test edebilmen için buton ekler
 
 jobs:
