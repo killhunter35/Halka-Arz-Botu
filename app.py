@@ -9,7 +9,7 @@ TOKEN = "8654296905:AAG18XC5eWq1EiJrYv0AMnXIiXvXI6t6PIs"
 EXCEL_URL = "https://raw.githubusercontent.com/killhunter35/Halka-Arz-Botu/main/Halka_Arz_Verileri.xlsx"
 
 # Render site adresin (Kullanıcı adın farklıysa killhunter35 kısmını değiştir)
-WEBHOOK_URL = "https://halka-arz-asistani.onrender.com"
+WEBHOOK_URL = "https://halka-arz-asistani.onrender.com/"
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
