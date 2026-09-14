@@ -250,8 +250,14 @@ def getMessage():
     bot.process_new_updates([update])
     return "!", 200
 
+# UptimeRobot'un 10 dakikada bir ziyaret edeceği "Hayattayım" sayfası (Telegram'ı yormaz)
 @app.route("/")
-def webhook():
+def ping():
+    return "Bot aktif ve uyanık!", 200
+
+# Sadece senin manuel olarak 1 kere gireceğin kurulum sayfası
+@app.route("/kurulum")
+def webhook_kurulum():
     bot.remove_webhook()
     bot.set_webhook(url=WEBHOOK_URL + TOKEN)
     return f"Webhook başarıyla ayarlandı! Bot artık 7/24 {WEBHOOK_URL} adresinde dinliyor.", 200
