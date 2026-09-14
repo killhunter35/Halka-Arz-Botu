@@ -19,8 +19,14 @@ def excel_indir(sayfa_adi):
     response = requests.get(EXCEL_URL)
     if response.status_code != 200:
         raise Exception(f"GitHub'a ulaşılamadı (Hata: {response.status_code})")
-    return pd.read_excel(io.BytesIO(response.content), sheet_name=sayfa_adi, engine='openpyxl')
-
+    
+    try:
+        # Sekmeyi okumayı dener
+        return pd.read_excel(io.BytesIO(response.content), sheet_name=sayfa_adi, engine='openpyxl')
+    except ValueError:
+        # Eğer sekme Excel'de yoksa (silinmişse), çökmek yerine boş bir tablo döndürür
+        return pd.DataFrame()
+        
 def temizle(metin):
     return str(metin).replace('I', 'ı').replace('İ', 'i').replace('Ö', 'ö').replace('Ü', 'ü').replace('Ş', 'ş').replace('Ç', 'ç').replace('Ğ', 'ğ').lower()
 
