@@ -11,7 +11,7 @@ EXCEL_URL = "https://raw.githubusercontent.com/killhunter35/Halka-Arz-Botu/main/
 # Render site adresin (Kullanıcı adın farklıysa killhunter35 kısmını değiştir)
 WEBHOOK_URL = "https://halka-arz-asistani.onrender.com/"
 
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(TOKEN, threaded=False)
 app = Flask(__name__)
 kullanici_secimleri = {}
 
